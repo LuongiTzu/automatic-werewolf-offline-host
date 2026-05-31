@@ -1,1 +1,1 @@
-"""Werewolf Game Backend"""
+"""WebSocket package"""

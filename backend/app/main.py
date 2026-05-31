@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import create_tables, SessionLocal
-from app.routers import rooms, roles, game
+from app.routers import rooms, roles, game, ws
 from app.services import RoleService
 
 # Configure logging
@@ -64,6 +64,7 @@ app.add_middleware(
 app.include_router(rooms.router)
 app.include_router(roles.router)
 app.include_router(game.router)
+app.include_router(ws.router)
 
 
 @app.get("/")

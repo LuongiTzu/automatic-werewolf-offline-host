@@ -1,4 +1,4 @@
 """Routers package"""
-from app.routers import rooms, roles, game
+from app.routers import rooms, roles, game, ws
 
-__all__ = ["rooms", "roles", "game"]
+__all__ = ["rooms", "roles", "game", "ws"]

@@ -1,5 +1,7 @@
 """Game API routers"""
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
@@ -11,8 +13,14 @@ from app.schemas import (
     StartedPlayerResponse,
     PlayerRoleResponse,
 )
+from app.websocket.connection_manager import manager
 
 router = APIRouter(prefix="/api", tags=["game"])
+
+
+def now_iso() -> str:
+    """Return current UTC time in ISO format."""
+    return datetime.now(timezone.utc).isoformat()
 
 
 @router.post("/rooms/{room_code}/start", response_model=StartGameResponse)
@@ -56,7 +64,7 @@ async def start_game(room_code: str, db: Session = Depends(get_db)):
         for player in players
     ]
 
-    return StartGameResponse(
+    response = StartGameResponse(
         room_code=room.room_code,
         room_id=room.id,
         status=room.status.value if hasattr(room.status, "value") else str(room.status),
@@ -69,6 +77,18 @@ async def start_game(room_code: str, db: Session = Depends(get_db)):
         message="Game started successfully. Roles have been assigned.",
         players=players_response,
     )
+
+    await manager.broadcast_room(
+        room.room_code,
+        {
+            "type": "GAME_STARTED",
+            "room_code": room.room_code,
+            "payload": response.model_dump(mode="json"),
+            "timestamp": now_iso(),
+        },
+    )
+
+    return response
 
 
 @router.get("/players/{player_id}/role", response_model=PlayerRoleResponse)
