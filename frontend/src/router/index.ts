@@ -1,14 +1,16 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import HostRoom from '../pages/HostRoom.vue'
-import PlayerJoin from '../pages/PlayerJoin.vue'
-import PlayerGame from '../pages/PlayerGame.vue'
+import HomePage from '@/pages/HomePage.vue'
+import HostRoom from '@/pages/HostRoom.vue'
+import PlayerGame from '@/pages/PlayerGame.vue'
+import PlayerJoin from '@/pages/PlayerJoin.vue'
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
     {
       path: '/',
-      redirect: '/host',
+      name: 'HomePage',
+      component: HomePage,
     },
     {
       path: '/host',

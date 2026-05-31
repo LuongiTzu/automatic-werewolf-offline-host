@@ -1,89 +1,98 @@
 <template>
-  <section class="mx-auto max-w-2xl space-y-6">
-    <div class="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-      <h2 class="text-2xl font-bold">Player Game</h2>
-
-      <div v-if="!store.roomCode || !store.playerId" class="mt-4 rounded-xl bg-yellow-950 p-4 text-yellow-100">
-        Bạn chưa join phòng. Hãy quay lại trang Player để vào phòng.
-      </div>
-
-      <div v-else class="mt-6 space-y-4">
-        <div class="rounded-xl bg-slate-800 p-4">
-          <p class="text-sm text-slate-400">Tên</p>
-          <p class="text-xl font-bold">{{ store.playerName }}</p>
-        </div>
-
-        <div class="rounded-xl bg-slate-800 p-4">
-          <p class="text-sm text-slate-400">Mã phòng</p>
-          <p class="text-3xl font-black tracking-[0.3em] text-red-300">{{ store.roomCode }}</p>
-        </div>
-
-        <div class="grid gap-3 sm:grid-cols-3">
-          <div class="rounded-xl bg-slate-800 p-4">
-            <p class="text-sm text-slate-400">Status</p>
-            <p class="font-bold">{{ store.status || 'waiting' }}</p>
-          </div>
-
-          <div class="rounded-xl bg-slate-800 p-4">
-            <p class="text-sm text-slate-400">Phase</p>
-            <p class="font-bold">{{ store.currentPhase || 'setup' }}</p>
-          </div>
-
-          <div class="rounded-xl bg-slate-800 p-4">
-            <p class="text-sm text-slate-400">WebSocket</p>
-            <p class="font-bold" :class="store.socketConnected ? 'text-green-400' : 'text-yellow-400'">
-              {{ store.socketConnected ? 'Connected' : 'Not connected' }}
-            </p>
-          </div>
-        </div>
-
-        <button
-          v-if="store.status === 'playing'"
-          class="w-full rounded-xl bg-red-700 px-5 py-3 font-bold hover:bg-red-600"
-          @click="store.loadMyRole"
-        >
-          Xem role của tôi
-        </button>
-
-        <div v-if="store.myRole" class="rounded-2xl border border-red-800 bg-red-950/40 p-6 text-center">
-          <p class="text-sm text-red-200">Role của bạn</p>
-          <h3 class="mt-2 text-3xl font-black">{{ store.myRole.role_name }}</h3>
-          <p class="mt-2 text-sm text-red-100">{{ store.myRole.role_code }} · {{ store.myRole.side }}</p>
-          <p class="mt-4 text-sm text-slate-200">{{ store.myRole.description }}</p>
-        </div>
-      </div>
+  <section class="mx-auto max-w-3xl space-y-6">
+    <div v-if="!store.roomCode || !store.playerId" class="rounded-xl bg-yellow-950 p-4 text-yellow-100">
+      Bạn chưa join phòng. Hãy quay lại trang Người chơi để vào phòng.
     </div>
 
-    <div class="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-      <h3 class="text-xl font-bold">Realtime Events</h3>
-
-      <div class="mt-4 max-h-72 space-y-2 overflow-auto">
-        <div
-          v-for="event in store.events"
-          :key="event.timestamp + event.type"
-          class="rounded-lg bg-slate-800 p-3 text-xs"
-        >
-          <p class="font-bold text-yellow-300">{{ event.type }}</p>
-          <pre class="mt-1 whitespace-pre-wrap text-slate-300">{{ event.payload }}</pre>
+    <template v-else>
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 class="text-2xl font-black">{{ store.playerName }}</h1>
+          <p class="text-sm text-slate-400">Phòng {{ store.roomCode }}</p>
         </div>
-
-        <p v-if="store.events.length === 0" class="text-sm text-slate-400">
-          Chưa có event realtime.
-        </p>
+        <div class="flex items-center gap-2">
+          <PhaseBadge :phase="store.currentPhase || 'setup'" />
+          <ConnectionStatus :status="store.socketStatus" />
+        </div>
       </div>
-    </div>
+
+      <p v-if="store.error" class="rounded-lg bg-red-950 p-3 text-sm text-red-200">
+        {{ store.error }}
+      </p>
+
+      <PlayerGameOver v-if="store.isGameOver || store.currentPhase === 'ended'" :winner="store.winner" />
+
+      <PlayerDeadView v-else-if="!store.isMeAlive" />
+
+      <PlayerLobby
+        v-else-if="store.status !== 'playing'"
+        :player-name="store.playerName"
+        :room-code="store.roomCode"
+        :players="store.players"
+      />
+
+      <PlayerRoleReveal
+        v-else-if="store.currentPhase === 'role_reveal' || !store.myRole"
+        :role="store.myRole"
+        @load-role="store.loadMyRole"
+      />
+
+      <PlayerNightAction
+        v-else-if="store.allowedNightAction"
+        :action="store.allowedNightAction"
+        :result="store.lastNightActionResult"
+        :player-id="store.playerId"
+        @submit="store.submitNightAction"
+      />
+
+      <PlayerNightSleep
+        v-else-if="store.currentPhase === 'night_start' || store.currentPhase === 'night_role_turn' || store.currentPhase === 'night_resolving'"
+        :phase-ends-at="store.phaseEndsAt"
+      />
+
+      <PlayerDayView
+        v-else-if="store.currentPhase === 'day_result' || store.currentPhase === 'day_discussion'"
+        :phase-ends-at="store.phaseEndsAt"
+        :dead-players="store.dayResult?.dead_players || []"
+      />
+
+      <PlayerVoteView
+        v-else-if="store.currentPhase === 'voting'"
+        :targets="store.voteStarted?.targets || store.alivePlayers"
+        :player-id="store.playerId"
+        :phase-ends-at="store.phaseEndsAt"
+        :summary="store.voteSummary"
+        @vote="store.submitVote"
+      />
+
+      <div v-else class="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+        <h2 class="text-2xl font-bold">Đang chờ</h2>
+        <p class="mt-2 text-slate-300">Hệ thống đang chuyển phase. Hãy chờ màn hình tự cập nhật.</p>
+      </div>
+    </template>
   </section>
 </template>
 
 <script setup lang="ts">
 import { onMounted } from 'vue'
-import { useRoomStore } from '../stores/roomStore'
+import ConnectionStatus from '@/components/common/ConnectionStatus.vue'
+import PhaseBadge from '@/components/common/PhaseBadge.vue'
+import PlayerDayView from '@/components/player/PlayerDayView.vue'
+import PlayerDeadView from '@/components/player/PlayerDeadView.vue'
+import PlayerGameOver from '@/components/player/PlayerGameOver.vue'
+import PlayerLobby from '@/components/player/PlayerLobby.vue'
+import PlayerNightAction from '@/components/player/PlayerNightAction.vue'
+import PlayerNightSleep from '@/components/player/PlayerNightSleep.vue'
+import PlayerRoleReveal from '@/components/player/PlayerRoleReveal.vue'
+import PlayerVoteView from '@/components/player/PlayerVoteView.vue'
+import { useRoomStore } from '@/stores/roomStore'
 
 const store = useRoomStore()
 
 onMounted(async () => {
   if (store.roomCode && store.playerId) {
     await store.loadRoom()
+    if (store.status === 'playing') await store.loadMyRole()
     store.connectWebSocket('player')
   }
 })

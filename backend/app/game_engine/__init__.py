@@ -1,1 +1,1 @@
-"""Game logic engine"""
+"""Game engine package."""

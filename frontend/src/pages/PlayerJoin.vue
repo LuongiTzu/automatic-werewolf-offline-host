@@ -1,10 +1,8 @@
 <template>
   <section class="mx-auto max-w-xl">
     <div class="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-      <h2 class="text-2xl font-bold">Player Join</h2>
-      <p class="mt-1 text-sm text-slate-400">
-        Nhập mã phòng và tên để tham gia game.
-      </p>
+      <h2 class="text-2xl font-bold">Người chơi</h2>
+      <p class="mt-1 text-sm text-slate-400">Nhập mã phòng và tên để tham gia game.</p>
 
       <form class="mt-6 space-y-4" @submit.prevent="join">
         <div>
@@ -27,10 +25,7 @@
           />
         </div>
 
-        <button
-          class="w-full rounded-xl bg-red-700 px-5 py-3 font-bold hover:bg-red-600 disabled:opacity-50"
-          :disabled="store.loading"
-        >
+        <button class="w-full rounded-xl bg-red-700 px-5 py-3 font-bold hover:bg-red-600 disabled:opacity-50" :disabled="store.loading">
           Vào phòng
         </button>
       </form>
@@ -39,17 +34,19 @@
         {{ store.error }}
       </p>
     </div>
+
+    <LoadingOverlay :show="store.loading" />
   </section>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useRoomStore } from '../stores/roomStore'
+import LoadingOverlay from '@/components/common/LoadingOverlay.vue'
+import { useRoomStore } from '@/stores/roomStore'
 
 const router = useRouter()
 const store = useRoomStore()
-
 const roomCode = ref('')
 const name = ref('')
 
@@ -60,9 +57,6 @@ async function join() {
   }
 
   await store.joinRoom(roomCode.value, name.value)
-
-  if (!store.error) {
-    router.push('/player')
-  }
+  if (!store.error) router.push('/player')
 }
 </script>

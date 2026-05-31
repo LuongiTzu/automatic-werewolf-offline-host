@@ -1,3 +1,23 @@
+import type {
+  DayStartedPayload,
+  GameLogItem,
+  GameState,
+  NightActionResponse,
+  StartGameResponse,
+  SubmitNightActionRequest,
+  VoteEndedPayload,
+  VoteStartedPayload,
+  VoteSummary,
+} from '@/types/game'
+import type { PlayerRole } from '@/types/player'
+import type {
+  CreateRoomResponse,
+  JoinRoomResponse,
+  RoleCartResponse,
+  RoleResponse,
+  RoomInfoResponse,
+} from '@/types/room'
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -14,117 +34,46 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
     try {
       const data = await response.json()
-      message = data.detail || message
+      if (typeof data.detail === 'string') message = data.detail
+      else if (Array.isArray(data.detail)) message = data.detail.map((item: { msg?: string }) => item.msg || 'Validation error').join(', ')
     } catch {
-      // Ignore JSON parse error
+      // Keep default message.
     }
 
     throw new Error(message)
   }
 
-  return response.json()
-}
+  if (response.status === 204) {
+    return undefined as T
+  }
 
-export interface PlayerInRoom {
-  id: string
-  name: string
-  is_alive: boolean
-  is_connected: boolean
-}
-
-export interface CreateRoomResponse {
-  room_id: string
-  room_code: string
-  host_token: string
-  status: string
-  created_at: string
-}
-
-export interface JoinRoomResponse {
-  player_id: string
-  session_token: string
-  room_code: string
-  room_id: string
-  player_name: string
-  player_count: number
-  status: string
-}
-
-export interface RoomInfoResponse {
-  id: string
-  room_code: string
-  status: string
-  current_phase: string
-  night_number: number
-  day_number: number
-  players: PlayerInRoom[]
-  player_count: number
-  created_at: string
-}
-
-export interface RoleResponse {
-  code: string
-  name: string
-  side: string
-  description: string
-  night_order: number | null
-  is_active: boolean
-}
-
-export interface RoleCartItem {
-  role_code: string
-  name: string
-  quantity: number
-}
-
-export interface RoleCartResponse {
-  room_code: string
-  room_id: string
-  cart: RoleCartItem[]
-  total_roles: number
-  total_players: number
-  can_start: boolean
-}
-
-export interface StartGameResponse {
-  room_code: string
-  room_id: string
-  status: string
-  current_phase: string
-  night_number: number
-  day_number: number
-  total_players: number
-  message: string
-  players: PlayerInRoom[]
-}
-
-export interface PlayerRoleResponse {
-  player_id: string
-  player_name: string
-  room_id: string
-  role_code: string
-  role_name: string
-  side: string
-  description?: string
-  night_order?: number
+  return response.json() as Promise<T>
 }
 
 export const api = {
   createRoom() {
-    return request<CreateRoomResponse>('/api/rooms/', {
-      method: 'POST',
-    })
+    return request<CreateRoomResponse>('/api/rooms/', { method: 'POST' })
   },
 
   getRoom(roomCode: string) {
-    return request<RoomInfoResponse>(`/api/rooms/${roomCode}`)
+    return request<RoomInfoResponse>(`/api/rooms/${encodeURIComponent(roomCode)}`)
   },
 
   joinRoom(roomCode: string, name: string) {
-    return request<JoinRoomResponse>(`/api/rooms/${roomCode}/join`, {
+    return request<JoinRoomResponse>(`/api/rooms/${encodeURIComponent(roomCode)}/join`, {
       method: 'POST',
       body: JSON.stringify({ name }),
     })
+  },
+
+  kickPlayer(roomId: string, playerId: string, hostToken: string) {
+    return request<{ message: string; player_id: string }>(
+      `/api/rooms/${encodeURIComponent(roomId)}/players/${encodeURIComponent(playerId)}`,
+      {
+        method: 'DELETE',
+        headers: { 'X-Host-Token': hostToken },
+      },
+    )
   },
 
   getRoles() {
@@ -132,24 +81,94 @@ export const api = {
   },
 
   getRoleCart(roomCode: string) {
-    return request<RoleCartResponse>(`/api/rooms/${roomCode}/role-cart`)
+    return request<RoleCartResponse>(`/api/rooms/${encodeURIComponent(roomCode)}/role-cart`)
   },
 
   updateRoleCart(roomCode: string, roles: { role_code: string; quantity: number }[]) {
-    return request<RoleCartResponse>(`/api/rooms/${roomCode}/role-cart`, {
+    return request<RoleCartResponse>(`/api/rooms/${encodeURIComponent(roomCode)}/role-cart`, {
       method: 'PUT',
       body: JSON.stringify({ roles }),
     })
   },
 
   startGame(roomCode: string) {
-    return request<StartGameResponse>(`/api/rooms/${roomCode}/start`, {
+    return request<StartGameResponse>(`/api/rooms/${encodeURIComponent(roomCode)}/start`, {
       method: 'POST',
+    })
+  },
+
+  startAutoGame(roomId: string, hostToken: string) {
+    return request<{ message: string; room_code: string }>(`/api/rooms/${encodeURIComponent(roomId)}/auto/start`, {
+      method: 'POST',
+      body: JSON.stringify({ host_token: hostToken }),
+    })
+  },
+
+  pauseAutoGame(roomId: string, hostToken: string) {
+    return request<{ message: string }>(`/api/rooms/${encodeURIComponent(roomId)}/auto/pause`, {
+      method: 'POST',
+      body: JSON.stringify({ host_token: hostToken }),
+    })
+  },
+
+  resumeAutoGame(roomId: string, hostToken: string) {
+    return request<{ message: string }>(`/api/rooms/${encodeURIComponent(roomId)}/auto/resume`, {
+      method: 'POST',
+      body: JSON.stringify({ host_token: hostToken }),
+    })
+  },
+
+  stopAutoGame(roomId: string, hostToken: string) {
+    return request<{ message: string }>(`/api/rooms/${encodeURIComponent(roomId)}/auto/stop`, {
+      method: 'POST',
+      body: JSON.stringify({ host_token: hostToken }),
+    })
+  },
+
+  getGameState(roomId: string) {
+    return request<GameState>(`/api/rooms/${encodeURIComponent(roomId)}/state`)
+  },
+
+  submitNightAction(roomId: string, payload: SubmitNightActionRequest) {
+    return request<NightActionResponse>(`/api/rooms/${encodeURIComponent(roomId)}/night/action`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  },
+
+  submitVote(roomId: string, payload: { voter_player_id: string; session_token: string; target_player_id: string }) {
+    return request<VoteSummary>(`/api/rooms/${encodeURIComponent(roomId)}/vote`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
     })
   },
 
   getMyRole(playerId: string, sessionToken: string) {
     const token = encodeURIComponent(sessionToken)
-    return request<PlayerRoleResponse>(`/api/players/${playerId}/role?session_token=${token}`)
+    return request<PlayerRole>(`/api/players/${encodeURIComponent(playerId)}/role?session_token=${token}`)
   },
+
+  getLogs(roomId: string, hostToken: string) {
+    return request<{ logs: GameLogItem[] }>(`/api/rooms/${encodeURIComponent(roomId)}/logs`, {
+      headers: { 'X-Host-Token': hostToken },
+    })
+  },
+}
+
+export type {
+  CreateRoomResponse,
+  DayStartedPayload,
+  GameLogItem,
+  GameState,
+  JoinRoomResponse,
+  NightActionResponse,
+  PlayerRole,
+  RoleCartResponse,
+  RoleResponse,
+  RoomInfoResponse,
+  StartGameResponse,
+  SubmitNightActionRequest,
+  VoteEndedPayload,
+  VoteStartedPayload,
+  VoteSummary,
 }
