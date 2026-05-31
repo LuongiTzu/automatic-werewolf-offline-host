@@ -13,9 +13,10 @@ class Settings:
     API_VERSION = "0.1.0"
     
     # Database
+    # Default to SQLite for local development
     DATABASE_URL = os.getenv(
         "DATABASE_URL",
-        "postgresql://user:password@localhost/werewolf_db"
+        "sqlite:///./werewolf.db"
     )
     
     # WebSocket
